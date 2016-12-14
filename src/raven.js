@@ -324,6 +324,9 @@ Raven.prototype = {
      * @return {Raven}
      */
     captureException: function(ex, options) {
+        // Store the raw exception to pass to dataCallback
+        this._lastCapturedException = ex;
+
         // If not an Error is passed through, recall as a message instead
         if (!isError(ex)) {
             return this.captureMessage(ex, objectMerge({
@@ -331,9 +334,6 @@ Raven.prototype = {
                 stacktrace: true // if we fall back to captureMessage, default to attempting a new trace
             }, options));
         }
-
-        // Store the raw exception object for potential debugging and introspection
-        this._lastCapturedException = ex;
 
         // TraceKit.report will re-raise any exception passed to it,
         // which means you have to wrap it in try/catch. Instead, we
@@ -534,7 +534,7 @@ Raven.prototype = {
     setDataCallback: function(callback) {
         var original = this._globalOptions.dataCallback;
         this._globalOptions.dataCallback = isFunction(callback)
-          ? function (data) { return callback(data, original); }
+          ? function (data, originalCallback, error) { return callback(data, original, error); }
           : callback;
 
         return this;
@@ -1372,7 +1372,9 @@ Raven.prototype = {
         if (globalOptions.serverName) data.server_name = globalOptions.serverName;
 
         if (isFunction(globalOptions.dataCallback)) {
-            data = globalOptions.dataCallback(data) || data;
+					data = globalOptions.dataCallback(
+						data, null, (data.stacktrace) ? this.lastException() : null
+					) || data;
         }
 
         // Why??????????
